@@ -1,0 +1,61 @@
+import openai
+import requests
+import json
+import pandas as pd
+
+headers = {'x-api-key': 'INSERT ETSY API HERE'}
+API_ENDPOINT = "https://openapi.etsy.com/v3"
+
+SHOP_ID = "INSERT ETSY SHOP ID HERE"
+
+# Set up OpenAI API credentials
+openai.api_key = "INSERT OPENAI KEY HERE"
+
+# Initialize an empty list to store the data
+data = []
+
+# Set the number of results to retrieve per API request
+limit = 25
+
+# Retrieve your active listings from Etsy
+offset = 0
+while True:
+    response = requests.get(f"{API_ENDPOINT}/application/shops/{SHOP_ID}/listings/active?limit={limit}&offset={offset}", headers=headers)
+    listings = response.json().get("results", [])
+    if not listings:
+        break
+
+    # Use OpenAI's GPT-3 to generate a list of tags based on the text
+    for listing in listings:
+        # Concatenate the existing title and description into a single string
+        text = listing["title"] + " " + listing["description"]
+        tags_response = openai.Completion.create(
+            engine="text-davinci-002",
+            prompt=f"Please generate some tags for this text: {text}\n\nMaximum tag length: 20 characters.",
+            max_tokens=1024,
+            n=1,
+            stop=None,
+            temperature=0.5,
+        )
+        tags = tags_response.choices[0].text.strip().split("\n")
+
+        # Add the data to the list
+        data.append({
+            "Listing ID": listing.get("listing_id", ""),
+            "Name": listing.get("title", ""),
+            "Current Tags": listing.get("tags", []),
+            "Suggested Tags": tags
+        })
+
+        # Print the title and tags for the current listing
+        print(listing["title"], tags)
+
+    offset += limit
+
+# Convert the list to a Pandas DataFrame
+df = pd.DataFrame(data)
+
+# Save the DataFrame to an Excel file
+df.to_excel("listing_tags.xlsx", index=False)
+
+print("Excel file created successfully!")
